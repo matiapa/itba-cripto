@@ -18,59 +18,97 @@ public class Cryptography {
 
 
     public static void main(String[] args) throws Exception {
-//        encryptDES("blah","password","test".getBytes());
-//        System.out.println(Arrays.toString("this is the test string".getBytes()));
-//        byte[] cypher=encryptDES("CBC","pass","this is the test string".getBytes());
+//        encryptDES(,"blah","password","test".getBytes());
+
+        String chaining="ECB";
+        System.out.println(Arrays.toString("this is the test string".getBytes()));
+//        byte[] cypher=encryptDES(chaining,"pass","this is the test string".getBytes());
 //        System.out.println(Arrays.toString(cypher));
-//        System.out.println(Arrays.toString(decryptDES("CBC","pass", cypher)));
+//        System.out.println(Arrays.toString(decryptDES(chaining,"pass", cypher)));
+        int keyLen=256/8;
+
+//        byte[] cypher=encryptAESECB("pass","this is the test string".getBytes(),keyLen);
+//        System.out.println(Arrays.toString(cypher));
+//        System.out.println(Arrays.toString(decryptAESECB("pass", cypher,keyLen)));
+        byte[] cypher=encryptAES(chaining,"pass","this is the test string".getBytes(),keyLen);
+        System.out.println(Arrays.toString(cypher));
+        System.out.println(Arrays.toString(decryptAES(chaining,"pass", cypher,keyLen)));
 
     }
-    
-    private static class KeyInternal{
-        final private byte[] iv;
-        final private byte[] key;
 
-        public KeyInternal(byte[] iv, byte[] key) {
-            this.iv = iv;
-            this.key = key;
+    public static byte[][] EVP_BytesToKey(int key_len, int iv_len, MessageDigest md, byte[] salt, byte[] data, int count) {
+        byte[][] both = new byte[2][];
+        byte[] key = new byte[key_len];
+        int key_ix = 0;
+        byte[] iv = new byte[iv_len];
+        int iv_ix = 0;
+        both[0] = key;
+        both[1] = iv;
+        byte[] md_buf = null;
+        int nkey = key_len;
+        int niv = iv_len;
+        int i = 0;
+        if (data == null) {
+            return both;
         }
-
-        public byte[] getIv() {
-            return iv;
+        int addmd = 0;
+        for (; ; ) {
+            md.reset();
+            if (addmd++ > 0) {
+                md.update(md_buf);
+            }
+            md.update(data);
+            if (null != salt) {
+                md.update(salt, 0, 8);
+            }
+            md_buf = md.digest();
+            for (i = 1; i < count; i++) {
+                md.reset();
+                md.update(md_buf);
+                md_buf = md.digest();
+            }
+            i = 0;
+            if (nkey > 0) {
+                for (; ; ) {
+                    if (nkey == 0)
+                        break;
+                    if (i == md_buf.length)
+                        break;
+                    key[key_ix++] = md_buf[i];
+                    nkey--;
+                    i++;
+                }
+            }
+            if (niv > 0 && i != md_buf.length) {
+                for (; ; ) {
+                    if (niv == 0)
+                        break;
+                    if (i == md_buf.length)
+                        break;
+                    iv[iv_ix++] = md_buf[i];
+                    niv--;
+                    i++;
+                }
+            }
+            if (nkey == 0 && niv == 0) {
+                break;
+            }
         }
-
-        public byte[] getKey() {
-            return key;
+        for (i = 0; i < md_buf.length; i++) {
+            md_buf[i] = 0;
         }
+        return both;
     }
-
-    private static KeyInternal generateKey(byte[] pass, int count,int keyLength) throws NoSuchAlgorithmException {
-
-        byte[] data=new byte[256];
-        System.arraycopy(pass,0,data,0,pass.length);
-        MessageDigest mdSha256 = MessageDigest.getInstance("SHA-256");
-        for (int i = 0; i < count; i++) {
-            mdSha256.update(data);
-            data=mdSha256.digest();
-        }
-
-        byte[]key=new byte[keyLength/8];
-        byte[]iv=new byte[16];
-
-        System.arraycopy(data,0,key,0,keyLength/8);
-        System.arraycopy(data,0,iv,0,16);
-        return new KeyInternal(iv,key);
-    }
-
-
     public static byte[] encryptDES(String chaining,String password,byte[] content) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
         switch (chaining.toUpperCase()){
             case "ECB":
                 return encryptDESECB(password,content);
             case "CFB":
+                return encryptDESOther("CFB8",8,password,content);
             case "OFB":
+                return encryptDESOther("OFB",8,password,content);
             case "CBC":
-                return encryptDESOther(chaining.toUpperCase(),password,content);
+                return encryptDESOther("CBC",8,password,content);
             default:
                 throw new UnsupportedEncodingException();
         }
@@ -81,9 +119,11 @@ public class Cryptography {
             case "ECB":
                 return decryptDESECB(password,content);
             case "CFB":
+                return decryptDESOther("CFB8",8,password,content);
             case "OFB":
+                return decryptDESOther("OFB",8,password,content);
             case "CBC":
-                return decryptDESOther(chaining.toUpperCase(),password,content);
+                return decryptDESOther("CBC",8,password,content);
             default:
                 throw new UnsupportedEncodingException();
         }
@@ -114,11 +154,12 @@ public class Cryptography {
         return desCipher.doFinal(content);
     }
 
-    public static byte[] encryptDESOther(String chaining,String password,byte[]content){
+    public static byte[] encryptDESOther(String chaining,int ivLen,String password,byte[]content){
         try {
-            KeyInternal key=generateKey(password.getBytes(),65536,56);
-            IvParameterSpec ivspec = new IvParameterSpec(key.getIv());
-            SecretKeySpec secretKey = new SecretKeySpec(key.getKey(), "DES");
+
+            byte[][]keys=EVP_BytesToKey(8,ivLen,MessageDigest.getInstance("SHA256"),null,password.getBytes(),65536);
+            IvParameterSpec ivspec = new IvParameterSpec(keys[1]);
+            SecretKeySpec secretKey = new SecretKeySpec(keys[0], "DES");
             Cipher cipher = Cipher.getInstance("DES/"+chaining+"/PKCS5Padding");
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivspec);
             return cipher.doFinal(content);
@@ -128,16 +169,16 @@ public class Cryptography {
         return null;
 
     }
-    public static byte[] decryptDESOther(String chaining,String password,byte[]content){
+    public static byte[] decryptDESOther(String chaining,int ivLen,String password,byte[]content){
         try {
-            KeyInternal key=generateKey(password.getBytes(),65536,56);
-            IvParameterSpec ivspec = new IvParameterSpec(key.getIv());
-            SecretKeySpec secretKey = new SecretKeySpec(key.getKey(), "DES");
+            byte[][]keys=EVP_BytesToKey(8,ivLen,MessageDigest.getInstance("SHA256"),null,password.getBytes(),65536);
+            IvParameterSpec ivspec = new IvParameterSpec(keys[1]);
+            SecretKeySpec secretKey = new SecretKeySpec(keys[0], "DES");
             Cipher cipher = Cipher.getInstance("DES/"+chaining+"/PKCS5Padding");
             cipher.init(Cipher.DECRYPT_MODE, secretKey, ivspec);
             return cipher.doFinal(content);
         } catch (Exception e) {
-            System.out.println("Error while encrypting: " + e.toString());
+            System.out.println("Error while decrypting: " + e.toString());
         }
         return null;
 
@@ -150,9 +191,11 @@ public class Cryptography {
             case "ECB":
                 return encryptAESECB(password,content,keyLength);
             case "CFB":
+                return encryptAESOther("CFB8",16,password,content,keyLength);
             case "OFB":
+                return encryptAESOther("OFB",128/8,password,content,keyLength);
             case "CBC":
-                return encryptAESOther(chaining.toUpperCase(),password,content,keyLength);
+                return encryptAESOther("CBC",128/8,password,content,keyLength);
             default:
                 throw new UnsupportedEncodingException();
         }
@@ -161,11 +204,13 @@ public class Cryptography {
     public static byte[] decryptAES(String chaining,String password,byte[] content,int keyLength) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
         switch (chaining.toUpperCase()){
             case "ECB":
-                return decryptDESECB(password,content);
+                return decryptAESECB(password,content,keyLength);
             case "CFB":
+                return decryptAESOther("CFB8",16,password,content,keyLength);
             case "OFB":
+                return decryptAESOther("OFB",128/8,password,content,keyLength);
             case "CBC":
-                return decryptAESOther(chaining.toUpperCase(),password,content,keyLength);
+                return decryptAESOther("CBC",128/8,password,content,keyLength);
             default:
                 throw new UnsupportedEncodingException();
         }
@@ -173,8 +218,9 @@ public class Cryptography {
 
     public static byte[] encryptAESECB(String password,byte[] content,int keyLen) {
         try {
-            KeyInternal key=generateKey(password.getBytes(),65536,keyLen);
-            SecretKeySpec secretKey = new SecretKeySpec(key.getKey(), "AES");
+            byte[][]keys=EVP_BytesToKey(keyLen,0,MessageDigest.getInstance("SHA256"),null,password.getBytes(),65536);
+            IvParameterSpec ivspec = new IvParameterSpec(keys[1]);
+            SecretKeySpec secretKey = new SecretKeySpec(keys[0], "AES");
             Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
             cipher.init(Cipher.ENCRYPT_MODE, secretKey);
             return cipher.doFinal(content);
@@ -185,22 +231,23 @@ public class Cryptography {
     }
     public static byte[] decryptAESECB(String password,byte[] content,int keyLen) {
         try {
-            KeyInternal key=generateKey(password.getBytes(),65536,keyLen);
-            SecretKeySpec secretKey = new SecretKeySpec(key.getKey(), "AES");
+            byte[][]keys=EVP_BytesToKey(keyLen,0,MessageDigest.getInstance("SHA256"),null,password.getBytes(),65536);
+            IvParameterSpec ivspec = new IvParameterSpec(keys[1]);
+            SecretKeySpec secretKey = new SecretKeySpec(keys[0], "AES");
 
             Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
             cipher.init(Cipher.DECRYPT_MODE, secretKey);
             return cipher.doFinal(content);
         } catch (Exception e) {
-            System.out.println("Error while encrypting: " + e.toString());
+            System.out.println("Error while decrypting: " + e.toString());
         }
         return null;
     }
-    public static byte[] encryptAESOther(String chaining,String password,byte[] content,int keyLen) {
+    public static byte[] encryptAESOther(String chaining,int ivLen,String password,byte[] content,int keyLen) {
         try {
-            KeyInternal key=generateKey(password.getBytes(),65536,keyLen);
-            IvParameterSpec ivspec = new IvParameterSpec(key.getIv());
-            SecretKeySpec secretKey = new SecretKeySpec(key.getKey(), "AES");
+            byte[][]keys=EVP_BytesToKey(keyLen,ivLen,MessageDigest.getInstance("SHA256"),null,password.getBytes(),65536);
+            IvParameterSpec ivspec = new IvParameterSpec(keys[1]);
+            SecretKeySpec secretKey = new SecretKeySpec(keys[0], "AES");
             Cipher cipher = Cipher.getInstance("AES/"+chaining+"/PKCS5Padding");
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivspec);
             return cipher.doFinal(content);
@@ -209,11 +256,11 @@ public class Cryptography {
         }
         return null;
     }
-    public static byte[] decryptAESOther(String chaining,String password,byte[] content,int keyLen) {
+    public static byte[] decryptAESOther(String chaining,int ivLen,String password,byte[] content,int keyLen) {
         try {
-            KeyInternal key=generateKey(password.getBytes(),65536,keyLen);
-            IvParameterSpec ivspec = new IvParameterSpec(key.getIv());
-            SecretKeySpec secretKey = new SecretKeySpec(key.getKey(), "AES");
+            byte[][]keys=EVP_BytesToKey(keyLen,ivLen,MessageDigest.getInstance("SHA256"),null,password.getBytes(),65536);
+            IvParameterSpec ivspec = new IvParameterSpec(keys[1]);
+            SecretKeySpec secretKey = new SecretKeySpec(keys[0], "AES");
 
             Cipher cipher = Cipher.getInstance("AES/"+chaining+"/PKCS5Padding\"");
             cipher.init(Cipher.DECRYPT_MODE, secretKey, ivspec);
