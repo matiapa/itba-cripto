@@ -9,12 +9,12 @@ import java.util.List;
 public class Steganography {
 
     static String FILES_DIR = "tmp/";
+    static int BMP_HEADER_SIZE = 54;
+
 
     public static void embed(File hostFile, File payloadFile, String outFileName, EncodeMode encodeMode) throws IOException {
-        if (!hostFile.getName().split("\\.")[1].equals("bmp"))
-            throw new RuntimeException("Host file must be a BMP");
-
         int n = encodeMode== EncodeMode.LSB1 || encodeMode== EncodeMode.LSBI ? 1 : 4;
+        int hostOffset = BMP_HEADER_SIZE + (encodeMode == EncodeMode.LSBI ? 4 : 0);
 
         // Check that host file is big enough
 
@@ -23,10 +23,7 @@ public class Steganography {
 
         int minSize = (int) (4 + payloadFile.length() + extensionName.length() + 1);
         minSize *= Math.floorDiv(8, n);
-        minSize += encodeMode == EncodeMode.LSBI ? 4 : 0;
-
-        System.out.println(minSize);
-        System.out.println(hostFile.length());
+        minSize += hostOffset;
 
         if(hostFile.length() <  minSize)
             throw new RuntimeException(String.format("Host file must have at least %d bytes", minSize));
@@ -56,10 +53,10 @@ public class Steganography {
         extendedPayload = ArrayUtils.addAll(extendedPayload, extensionNameBytes);
 
         byte[] hostBytesOriginal = hostBytes.clone();
-        LSBEncode(extendedPayload, hostBytes, n, encodeMode==EncodeMode.LSBI ? 4 : 0);
+        LSBEncode(extendedPayload, hostBytes, n, hostOffset);
 
         if(encodeMode == EncodeMode.LSBI)
-            LSBIApply(hostBytesOriginal, hostBytes);
+            LSBIApply(hostBytesOriginal, hostBytes, hostOffset);
 
         // Write tampered host bytes
 
@@ -67,11 +64,10 @@ public class Steganography {
         os.write(hostBytes);
     }
 
-    public static void extract(File hostFile, String outFileName, EncodeMode encodeMode) throws IOException {
-        if (!hostFile.getName().split("\\.")[1].equals("bmp"))
-            throw new RuntimeException("Host file must be a BMP");
 
+    public static File extract(File hostFile, String outFileName, EncodeMode encodeMode) throws IOException {
         int n = encodeMode== EncodeMode.LSB1 || encodeMode== EncodeMode.LSBI ? 1 : 4;
+        int hostOffset = BMP_HEADER_SIZE + (encodeMode == EncodeMode.LSBI ? 4 : 0);
 
         // Read host file
 
@@ -82,19 +78,17 @@ public class Steganography {
         // Decode payload data with metadata
 
         if(encodeMode == EncodeMode.LSBI)
-            LSBIUnapply(hostBytes);
+            LSBIUnapply(hostBytes, hostOffset);
 
-        int offset = encodeMode==EncodeMode.LSBI ? 4 : 0;
-        byte[] payloadBytes = new byte[(int) Math.ceil((hostFile.length() - offset) / (8.0 / n))];
-        LSBDecode(hostBytes, payloadBytes, n, offset);
+        byte[] dataBytes = LSBDecode(hostBytes, n, hostOffset);
 
         // Get payload metadata
 
-        int payloadSize = ByteBuffer.wrap(payloadBytes, 0, 4).getInt();
+        int payloadSize = ByteBuffer.wrap(dataBytes, 0, 4).getInt();
 
         List<Byte> extensionNameBytes = new ArrayList<>();
-        for(int i=4+payloadSize; payloadBytes[i] != 0; i++)
-            extensionNameBytes.add(payloadBytes[i]);
+        for(int i=4+payloadSize; dataBytes[i] != 0; i++)
+            extensionNameBytes.add(dataBytes[i]);
         String extensionName = new String(ArrayUtils.toPrimitive(extensionNameBytes.toArray(new Byte[0])), StandardCharsets.UTF_8);
 
         // Write payload data into output file
@@ -103,37 +97,43 @@ public class Steganography {
         File outputFile = new File(filename);
         FileOutputStream os = new FileOutputStream(outputFile);
 
-        os.write(payloadBytes, 4, payloadSize);
+        os.write(dataBytes, 4, payloadSize);
+
+        return outputFile;
     }
 
 
-    static void LSBEncode(byte[] payload, byte[] host, int n, int hostOffset) {
-        int payloadBit=0, hostBit=8-n + hostOffset*8;
-        while(payloadBit < payload.length * 8) {
+    static void LSBEncode(byte[] data, byte[] host, int n, int hostOffset) {
+        int dataBit=0, hostBit=8-n + hostOffset*8;
+        while(dataBit < data.length * 8) {
             for(int i=hostBit; i<hostBit+n; i++)
-                copyBit(payload, payloadBit++, host, i);
+                copyBit(data, dataBit++, host, i);
             hostBit += 8;
         }
     }
 
 
-    static void LSBDecode(byte[] host, byte[] payload, int n, int hostOffset) {
-        int payloadBit=0, hostBit=8-n + hostOffset*8;
-        while(payloadBit < payload.length * 8) {
+    static byte[] LSBDecode(byte[] host, int n, int hostOffset) {
+        byte[] dataBytes = new byte[(int) Math.ceil((host.length - hostOffset) / (8.0 / n))];
+
+        int dataBit=0, hostBit=8-n + hostOffset*8;
+        while(hostBit < host.length*8-n) {
             for(int i=hostBit; i<hostBit+n; i++)
-                copyBit(host, i, payload, payloadBit++);
+                copyBit(host, i, dataBytes, dataBit++);
             hostBit += 8;
         }
+
+        return dataBytes;
     }
 
 
-    static void LSBIApply(byte[] original_host, byte[] tampered_host) {
+    static void LSBIApply(byte[] original_host, byte[] tampered_host, int hostOffset) {
         int[] changes = new int[4];
         int[] conservations = new int[4];
 
         // Count the amount of changes and conservations for each 2-bit group
 
-        for(int i=4; i<original_host.length; i++) {
+        for(int i=hostOffset+4; i<original_host.length; i++) {
             int group = (original_host[i] & 0b00000110) >> 1;
 
             if(original_host[i] != tampered_host[i])
@@ -146,7 +146,7 @@ public class Steganography {
 
         boolean[] flipped_groups = new boolean[]{false, false, false, false};
 
-        for(int i=4; i<original_host.length; i++) {
+        for(int i=hostOffset+4; i<original_host.length; i++) {
             int group = (original_host[i] & 0b00000110) >> 1;
 
             if(changes[group] > conservations[group]) {
@@ -162,22 +162,24 @@ public class Steganography {
 
         for(int i=0; i<4; i++)
             if(flipped_groups[i])
-                tampered_host[i] |= 1;
+                tampered_host[hostOffset+i] |= 0b00000001;
+            else
+                tampered_host[hostOffset+i] &= 0b11111110;
     }
 
 
-    static void LSBIUnapply(byte[] host) {
+    static void LSBIUnapply(byte[] host, int hostOffset) {
         boolean[] flipped_groups = new boolean[]{false, false, false, false};
 
         // Recover flipped groups information
 
         for(int i=0; i<4; i++)
-            if((host[i] & 1) == 1)
+            if((host[hostOffset+i] & 1) == 1)
                 flipped_groups[i] = true;
 
         // Restore the flipped groups
 
-        for(int i=4; i<host.length; i++) {
+        for(int i=hostOffset+4; i<host.length; i++) {
             int group = (host[i] & 0b00000110) >> 1;
 
             if(flipped_groups[group]) {
@@ -201,17 +203,35 @@ public class Steganography {
     }
 
 
+    static void checkValidBMP(File file) throws IOException {
+        FileInputStream is = new FileInputStream(file);
+        byte[] bytes = new byte[(int) file.length()];
+        is.read(bytes);
+
+        if (bytes[0] != 0x42 || bytes[1] != 0x4D)
+            throw new RuntimeException("Host file must be a BMP");
+
+        if (bytes[28] != 24)
+            throw new RuntimeException("BMP must be 24 bits per pixel");
+
+        if (bytes[30] != 0)
+            throw new RuntimeException("BMP must have no compression");
+    }
+
+
     public static void main(String[] args) throws IOException {
         File hostFile = new File(FILES_DIR.concat("host.bmp"));
+        checkValidBMP(hostFile);
+
         File payloadFile = new File(FILES_DIR.concat("payload.bin"));
         embed(hostFile, payloadFile, "host_tampered.bmp", EncodeMode.LSBI);
 
-        // TODO: Mostrar error si el tamanio del host es insuficiente
-        // TODO: Mostrar error si el host posee compresion
-        // TODO: Agregar parsing de argumentos y valores default
-
         File hostTamperedFile = new File(FILES_DIR.concat("host_tampered.bmp"));
-        extract(hostTamperedFile, "payload_recovered", EncodeMode.LSBI);
+        checkValidBMP(hostTamperedFile);
+
+        File outputFile = extract(hostTamperedFile, "payload_recovered", EncodeMode.LSBI);
+
+        System.out.printf("Extracted payload to %s\n", outputFile.getName());
     }
 
     // HT: FF x31 FF  FF x8 FF FF FF FF
