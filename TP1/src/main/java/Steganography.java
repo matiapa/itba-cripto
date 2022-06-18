@@ -11,17 +11,7 @@ public class Steganography {
 
     static int BMP_HEADER_SIZE = 54;
 
-    public static void embed(File hostFile, File payloadFile, String outFileName, EncodeMode encodeMode, String password, EncryptionCypher cypher, EncryptionChaining chaining) {
-
-    }
-
-
-    public static File extract(File hostFile, String outFileName, EncodeMode encodeMode, String password, EncryptionCypher cypher, EncryptionChaining chaining) {
-        return null;
-    }
-
-
-    public static void embed(File hostFile, File payloadFile, String outFileName, EncodeMode encodeMode) throws IOException {
+    public static void embed(File hostFile, File payloadFile, String outFileName, EncodeMode encodeMode, String password, EncryptionCypher cypher, EncryptionChaining chaining) throws IOException {
         int n = encodeMode== EncodeMode.LSB1 || encodeMode== EncodeMode.LSBI ? 1 : 4;
         int hostOffset = BMP_HEADER_SIZE + (encodeMode == EncodeMode.LSBI ? 4 : 0);
 
@@ -56,10 +46,21 @@ public class Steganography {
         byte[] payloadDataBytes = new byte[payloadSize];
         is.read(payloadDataBytes);
 
-        // Encode payload data with metadata
+        // Create sequence with payload data and metadata
 
         byte[] extendedPayload = ArrayUtils.addAll(payloadSizeBytes, payloadDataBytes);
         extendedPayload = ArrayUtils.addAll(extendedPayload, extensionNameBytes);
+
+        // Encrypt if a password is given
+
+        if(password != null) {
+            extendedPayload = Cryptography.encrypt(extendedPayload, password, cypher, chaining);
+
+            int sequenceSize = extendedPayload.length;
+            byte[] sequenceSizeBytes = ByteBuffer.allocate(4).putInt(sequenceSize).array();
+
+            extendedPayload = ArrayUtils.addAll(sequenceSizeBytes, extendedPayload);
+        }
 
         byte[] hostBytesOriginal = hostBytes.clone();
         LSBEncode(extendedPayload, hostBytes, n, hostOffset);
@@ -74,7 +75,7 @@ public class Steganography {
     }
 
 
-    public static File extract(File hostFile, String outFileName, EncodeMode encodeMode) throws IOException {
+    public static File extract(File hostFile, String outFileName, EncodeMode encodeMode, String password, EncryptionCypher cypher, EncryptionChaining chaining) throws IOException {
         int n = encodeMode== EncodeMode.LSB1 || encodeMode== EncodeMode.LSBI ? 1 : 4;
         int hostOffset = BMP_HEADER_SIZE + (encodeMode == EncodeMode.LSBI ? 4 : 0);
 
@@ -90,6 +91,13 @@ public class Steganography {
             LSBIUnapply(hostBytes, hostOffset);
 
         byte[] dataBytes = LSBDecode(hostBytes, n, hostOffset);
+
+        // Decrypt if a password is given
+
+        if(password != null) {
+            dataBytes = ArrayUtils.subarray(dataBytes, 4, dataBytes.length);
+            dataBytes = Cryptography.decrypt(dataBytes, password, cypher, chaining);
+        }
 
         // Get payload metadata
 
@@ -304,12 +312,7 @@ public class Steganography {
                 return;
             }
             File payloadFile = new File(cmd.getOptionValue("in"));
-
-            if(password != null)
-                embed(hostFile, payloadFile, cmd.getOptionValue("out"), encodeMode, password, cypher, chaining);
-            else
-                embed(hostFile, payloadFile, cmd.getOptionValue("out"), encodeMode);
-
+            embed(hostFile, payloadFile, cmd.getOptionValue("out"), encodeMode, password, cypher, chaining);
             System.out.printf("Embedded payload into %s\n", cmd.getOptionValue("out"));
         }
 
@@ -317,10 +320,7 @@ public class Steganography {
 
         if(cmd.hasOption("extract")) {
             File outputFile;
-            if(password != null)
-                outputFile = extract(hostFile, cmd.getOptionValue("out"), encodeMode, password, cypher, chaining);
-            else
-                outputFile = extract(hostFile, cmd.getOptionValue("out"), encodeMode);
+            outputFile = extract(hostFile, cmd.getOptionValue("out"), encodeMode, password, cypher, chaining);
             System.out.printf("Extracted payload to %s\n", outputFile.getName());
         }
     }

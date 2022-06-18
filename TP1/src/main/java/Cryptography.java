@@ -16,6 +16,14 @@ import java.util.Base64;
 public class Cryptography {
     private static final String SALT = "ssshhhhhhhhhhh!!!!";
 
+    public static byte[] encrypt(byte[] data, String password, Steganography.EncryptionCypher cypher, Steganography.EncryptionChaining chaining) {
+        return null;
+    }
+
+    public static byte[] decrypt(byte[] data, String password, Steganography.EncryptionCypher cypher, Steganography.EncryptionChaining chaining) {
+        return null;
+    }
+
 
     public static void main(String[] args) throws Exception {
 //        encryptDES(,"blah","password","test".getBytes());
