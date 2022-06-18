@@ -1,3 +1,4 @@
+import org.apache.commons.cli.*;
 import org.apache.commons.lang3.ArrayUtils;
 
 import java.io.*;
@@ -8,8 +9,16 @@ import java.util.List;
 
 public class Steganography {
 
-    static String FILES_DIR = "tmp/";
     static int BMP_HEADER_SIZE = 54;
+
+    public static void embed(File hostFile, File payloadFile, String outFileName, EncodeMode encodeMode, String password, EncryptionCypher cypher, EncryptionChaining chaining) {
+
+    }
+
+
+    public static File extract(File hostFile, String outFileName, EncodeMode encodeMode, String password, EncryptionCypher cypher, EncryptionChaining chaining) {
+        return null;
+    }
 
 
     public static void embed(File hostFile, File payloadFile, String outFileName, EncodeMode encodeMode) throws IOException {
@@ -60,7 +69,7 @@ public class Steganography {
 
         // Write tampered host bytes
 
-        FileOutputStream os = new FileOutputStream(FILES_DIR.concat(outFileName));
+        FileOutputStream os = new FileOutputStream(outFileName);
         os.write(hostBytes);
     }
 
@@ -93,7 +102,7 @@ public class Steganography {
 
         // Write payload data into output file
 
-        String filename = String.format("%s%s%s", FILES_DIR, outFileName, extensionName);
+        String filename = String.format("%s%s", outFileName, extensionName);
         File outputFile = new File(filename);
         FileOutputStream os = new FileOutputStream(outputFile);
 
@@ -219,19 +228,101 @@ public class Steganography {
     }
 
 
-    public static void main(String[] args) throws IOException {
-        File hostFile = new File(FILES_DIR.concat("host.bmp"));
+    public static void main(String[] args) throws IOException, ParseException {
+//        String arguments = "-embed -in tmp/payload.bin -p tmp/host.bmp -out tmp/host_tampered.bmp -steg LSBI";
+//        String arguments = "-extract -p tmp/host_tampered.bmp -out tmp/payload_recovered -steg LSBI";
+        String arguments = "-extract -p tmp/ladoLSBI.bmp -out tmp/out -steg LSBI";
+        args = arguments.split(" ");
+
+        Options options = new Options();
+        options.addOption("embed", false, "Embed a payload into a host");
+        options.addOption("extract", false, "Extract payload from a host");
+        options.addOption("in", true, "Payload file (only when embedding)");
+        options.addOption("p", true, "Host file (original when embedding, tampered when extracting");
+        options.addOption("out", true, "Output file (tampered host when embedding, payload when extracting)");
+        options.addOption("steg", true, "Steganography method: <LSB1 | LSB4 | LSBI>");
+        options.addOption("a", true, "Encryption cypher method <aes128 | aes192 | aes256 | des>");
+        options.addOption("m", true, "Encryption chaining method <ecb | cfb | ofb | cbc>");
+        options.addOption("pass", true, "Encryption password");
+
+        CommandLineParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(options, args);
+
+        if(!cmd.hasOption("p") || !cmd.hasOption("out") || !cmd.hasOption("steg")) {
+            System.out.println("Missing host file, output file and/or steganography mode");
+            return;
+        }
+
+        // Get and validate host file
+
+        File hostFile = new File(cmd.getOptionValue("p"));
         checkValidBMP(hostFile);
 
-        File payloadFile = new File(FILES_DIR.concat("payload.bin"));
-        embed(hostFile, payloadFile, "host_tampered.bmp", EncodeMode.LSBI);
+        // Get and validate encode mode
 
-        File hostTamperedFile = new File(FILES_DIR.concat("host_tampered.bmp"));
-        checkValidBMP(hostTamperedFile);
+        EncodeMode encodeMode;
+        try {
+            encodeMode = EncodeMode.valueOf(cmd.getOptionValue("steg"));
+        } catch (IllegalArgumentException e) {
+            System.out.println("Invalid steganography mode");
+            return;
+        }
 
-        File outputFile = extract(hostTamperedFile, "payload_recovered", EncodeMode.LSBI);
+        // Check if encryption is requested
 
-        System.out.printf("Extracted payload to %s\n", outputFile.getName());
+        String password = null;
+        EncryptionCypher cypher = EncryptionCypher.AES128;
+        EncryptionChaining chaining = EncryptionChaining.CBC;
+
+        if(cmd.hasOption("pass")) {
+            // Get and validate algorithm and chaining
+
+            password = cmd.getOptionValue("pass");
+
+            if(cmd.hasOption("a"))
+                try {
+                    cypher = EncryptionCypher.valueOf(cmd.getOptionValue("a").toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Invalid encryption cypher method");
+                    return;
+                }
+
+            if(cmd.hasOption("m"))
+                try {
+                    chaining = EncryptionChaining.valueOf(cmd.getOptionValue("m").toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Invalid encryption chaining method");
+                    return;
+                }
+        }
+
+        // Handle the embed request
+
+        if(cmd.hasOption("embed")) {
+            if(!cmd.hasOption("in") ) {
+                System.out.println("Missing payload file");
+                return;
+            }
+            File payloadFile = new File(cmd.getOptionValue("in"));
+
+            if(password != null)
+                embed(hostFile, payloadFile, cmd.getOptionValue("out"), encodeMode, password, cypher, chaining);
+            else
+                embed(hostFile, payloadFile, cmd.getOptionValue("out"), encodeMode);
+
+            System.out.printf("Embedded payload into %s\n", cmd.getOptionValue("out"));
+        }
+
+        // Handle the extract request
+
+        if(cmd.hasOption("extract")) {
+            File outputFile;
+            if(password != null)
+                outputFile = extract(hostFile, cmd.getOptionValue("out"), encodeMode, password, cypher, chaining);
+            else
+                outputFile = extract(hostFile, cmd.getOptionValue("out"), encodeMode);
+            System.out.printf("Extracted payload to %s\n", outputFile.getName());
+        }
     }
 
     // HT: FF x31 FF  FF x8 FF FF FF FF
@@ -242,5 +333,9 @@ public class Steganography {
     // 111 -> 110 E
 
     public enum EncodeMode {LSB1, LSB4, LSBI}
+
+    public enum EncryptionCypher {AES128, AES192, AES256, DES}
+
+    public enum EncryptionChaining {ECB, CFB, OFB, CBC}
 
 }
