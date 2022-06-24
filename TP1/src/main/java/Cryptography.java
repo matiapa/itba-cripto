@@ -17,18 +17,16 @@ import java.util.Arrays;
 public class Cryptography {
     private static final String SALT = "ssshhhhhhhhhhh!!!!";
 
-    public static byte[] encrypt(byte[] data, String password, Steganography.EncryptionCypher cypher, Steganography.EncryptionChaining chaining) {
-        return null;
+    public static byte[] encrypt(byte[] data, String password, Steganography.EncryptionCypher cypher, Steganography.EncryptionChaining chaining) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
+        return encrypt(chaining,cypher,password,data);
     }
 
-    public static byte[] decrypt(byte[] data, String password, Steganography.EncryptionCypher cypher, Steganography.EncryptionChaining chaining) {
-        return null;
+    public static byte[] decrypt(byte[] data, String password, Steganography.EncryptionCypher cypher, Steganography.EncryptionChaining chaining) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
+        return decrypt(chaining,cypher,password,data);
     }
 
 
     public static void main(String[] args) throws Exception {
-//        encryptDES(,"blah","password","test".getBytes());
-
 
 //        Security.setProperty("crypto.policy", "unlimited");
 //        int maxKeySize = javax.crypto.Cipher.getMaxAllowedKeyLength("AES");
@@ -224,12 +222,12 @@ public class Cryptography {
 
 
 
-    public static byte[] encryptAES(String chaining,String password,byte[] content,int keyLength) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
+    private static byte[] encryptAES(String chaining,String password,byte[] content,int keyLength) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
         switch (chaining.toUpperCase()){
             case "ECB":
                 return encryptAESECB(password,content,keyLength);
             case "CFB":
-                return encryptAESOther("CFB",16,password,content,keyLength);
+                return encryptAESOther("CFB8",16,password,content,keyLength);
             case "OFB":
                 return encryptAESOther("OFB",16,password,content,keyLength);
             case "CBC":
@@ -239,12 +237,12 @@ public class Cryptography {
         }
     }
 
-    public static byte[] decryptAES(String chaining,String password,byte[] content,int keyLength) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
+    private static byte[] decryptAES(String chaining,String password,byte[] content,int keyLength) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
         switch (chaining.toUpperCase()){
             case "ECB":
                 return decryptAESECB(password,content,keyLength);
             case "CFB":
-                return decryptAESOther("CFB",16,password,content,keyLength);
+                return decryptAESOther("CFB8",16,password,content,keyLength);
             case "OFB":
                 return decryptAESOther("OFB",16,password,content,keyLength);
             case "CBC":
@@ -286,7 +284,7 @@ public class Cryptography {
             byte[][]keys=EVP_BytesToKey(keyLen,ivLen,MessageDigest.getInstance("SHA256"),null,password.getBytes(),65536);
             IvParameterSpec ivspec = new IvParameterSpec(keys[1]);
             SecretKeySpec secretKey = new SecretKeySpec(keys[0], "AES");
-            Cipher cipher = Cipher.getInstance("AES/"+chaining+"/PKCS5PADDING");
+            Cipher cipher = Cipher.getInstance("AES/"+chaining+"/PKCS5PADDING",new BouncyCastleProvider());
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivspec);
             return cipher.doFinal(content);
         } catch (Exception e) {
@@ -300,7 +298,7 @@ public class Cryptography {
             IvParameterSpec ivspec = new IvParameterSpec(keys[1]);
             SecretKeySpec secretKey = new SecretKeySpec(keys[0], "AES");
 
-            Cipher cipher = Cipher.getInstance("AES/"+chaining+"/PKCS5Padding");
+            Cipher cipher = Cipher.getInstance("AES/"+chaining+"/PKCS5Padding",new BouncyCastleProvider());
             cipher.init(Cipher.DECRYPT_MODE, secretKey, ivspec);
             return cipher.doFinal(content);
         } catch (Exception e) {
