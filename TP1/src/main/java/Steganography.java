@@ -99,10 +99,17 @@ public class Steganography {
 
         byte[] dataBytes = LSBDecode(hostBytes, n, hostOffset);
 
+        System.out.printf("Data bytes: %d\n", dataBytes.length);
+
         // Decrypt if a password is given
 
         if(password != null) {
             int encryptedDataSize = ByteBuffer.wrap(dataBytes, 0, 4).getInt();
+            if(encryptedDataSize < 0 || encryptedDataSize > dataBytes.length)
+                throw new RuntimeException("Invalid data decoded: Invalid encrypted data size");
+
+            System.out.printf("Encrypted data size: %d\n", encryptedDataSize);
+
             dataBytes = ArrayUtils.subarray(dataBytes, 4, encryptedDataSize+4);
             dataBytes = Cryptography.decrypt(dataBytes, password, cypher, chaining);
         }
@@ -110,6 +117,14 @@ public class Steganography {
         // Get payload metadata
 
         int payloadSize = ByteBuffer.wrap(dataBytes, 0, 4).getInt();
+
+        if(payloadSize < 0 || payloadSize > dataBytes.length)
+            throw new RuntimeException("Invalid data decoded: Invalid payload size");
+
+        System.out.printf("Payload size: %d\n", payloadSize);
+
+        if(dataBytes[4+payloadSize] != '.')
+            throw new RuntimeException("Invalid data decoded: Invalid extension name");
 
         List<Byte> extensionNameBytes = new ArrayList<>();
         for(int i=4+payloadSize; i< dataBytes.length && dataBytes[i] != 0; i++)
@@ -245,9 +260,12 @@ public class Steganography {
 
 
     public static void main(String[] args) throws IOException, ParseException, IllegalBlockSizeException, NoSuchPaddingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
-//        String arguments = "-embed -in tmp/payload.bin -p tmp/in/host.bmp -out tmp/in/host_tampered.bmp -steg LSB1 -pass escondite -a aes192 -m cbc";
-//        String arguments = "-extract -p tmp/in/host_tampered.bmp -out tmp/out -steg LSB1 -pass escondite -a aes192 -m cbc";
-        String arguments = "-extract -p tmp/in/lsb1_aes192_cbc_escondite.bmp -out tmp/out -steg LSB1 -pass escondite -a aes192 -m cbc ";
+//        String arguments = "-embed -in tmp/extracted/pdf_image.bmp -p tmp/host.bmp -out tmp/host_tampered.bmp -steg LSB4 -a aes128 -m cfb -pass aplausos";
+//        String arguments = "-extract -p tmp/host_tampered.bmp -out tmp/out -steg LSB4 -a aes128 -m cfb -pass aplausos";
+
+//        String arguments = "-extract -p tmp/extracted/from_pdf.bmp -out tmp/out -steg LSBI -a aes128 -m cfb -pass aplausos";
+        String arguments = "-extract -p tmp/group/paris_lsb4.bmp -out tmp/out -steg LSB4 -a aes128 -m cfb -pass aplausos";
+
         args = arguments.split(" ");
 
         Options options = new Options();
