@@ -33,21 +33,18 @@ public class Cryptography {
 //        System.out.println("Max Key Size for AES : " + maxKeySize);
 //        Security.addProvider(new BouncyCastleProvider());
 
-        Steganography.EncryptionChaining chaining=Steganography.EncryptionChaining.CFB;
-        Steganography.EncryptionCypher encryptionCypher= Steganography.EncryptionCypher.AES128;
+        Steganography.EncryptionChaining chaining = Steganography.EncryptionChaining.CBC;
+        Steganography.EncryptionCypher encryptionCypher = Steganography.EncryptionCypher.AES128;
 
         System.out.println(Arrays.toString("this is the test string".getBytes()));
 
-
-
-
-        byte[] cypher=encrypt(chaining, encryptionCypher,"pass","this is the test string".getBytes());
+        byte[] cypher = encrypt(chaining, encryptionCypher,"pass", "this is the test string".getBytes());
         System.out.println(Arrays.toString(cypher));
-        System.out.println(Arrays.toString(decrypt(chaining, encryptionCypher,"pass",cypher)));
+        System.out.println(Arrays.toString(decrypt(chaining, encryptionCypher,"pass", cypher)));
 
     }
 
-    public static byte[] encrypt(
+    private static byte[] encrypt(
     Steganography.EncryptionChaining chaining,Steganography.EncryptionCypher cypher,String password,byte[] content) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
         if (cypher== Steganography.EncryptionCypher.DES){
             return encryptDES(chaining.toString(),password,content);
@@ -59,7 +56,7 @@ public class Cryptography {
         return encryptAES(chaining.toString(),password,content,keyLen);
 
     }
-    public static byte[] decrypt(
+    private static byte[] decrypt(
             Steganography.EncryptionChaining chaining,Steganography.EncryptionCypher cypher,String password,byte[] content) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
         if (cypher== Steganography.EncryptionCypher.DES){
             return decryptDES(chaining.toString(),password,content);

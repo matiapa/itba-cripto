@@ -1,17 +1,24 @@
 import org.apache.commons.cli.*;
 import org.apache.commons.lang3.ArrayUtils;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class Steganography {
 
     static int BMP_HEADER_SIZE = 54;
 
-    public static void embed(File hostFile, File payloadFile, String outFileName, EncodeMode encodeMode, String password, EncryptionCypher cypher, EncryptionChaining chaining) throws IOException {
+    public static void embed(File hostFile, File payloadFile, String outFileName, EncodeMode encodeMode, String password, EncryptionCypher cypher, EncryptionChaining chaining) throws IOException, IllegalBlockSizeException, NoSuchPaddingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
         int n = encodeMode== EncodeMode.LSB1 || encodeMode== EncodeMode.LSBI ? 1 : 4;
         int hostOffset = BMP_HEADER_SIZE + (encodeMode == EncodeMode.LSBI ? 4 : 0);
 
@@ -75,7 +82,7 @@ public class Steganography {
     }
 
 
-    public static File extract(File hostFile, String outFileName, EncodeMode encodeMode, String password, EncryptionCypher cypher, EncryptionChaining chaining) throws IOException {
+    public static File extract(File hostFile, String outFileName, EncodeMode encodeMode, String password, EncryptionCypher cypher, EncryptionChaining chaining) throws IOException, IllegalBlockSizeException, NoSuchPaddingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
         int n = encodeMode== EncodeMode.LSB1 || encodeMode== EncodeMode.LSBI ? 1 : 4;
         int hostOffset = BMP_HEADER_SIZE + (encodeMode == EncodeMode.LSBI ? 4 : 0);
 
@@ -95,7 +102,8 @@ public class Steganography {
         // Decrypt if a password is given
 
         if(password != null) {
-            dataBytes = ArrayUtils.subarray(dataBytes, 4, dataBytes.length);
+            int encryptedDataSize = ByteBuffer.wrap(dataBytes, 0, 4).getInt();
+            dataBytes = ArrayUtils.subarray(dataBytes, 4, encryptedDataSize+4);
             dataBytes = Cryptography.decrypt(dataBytes, password, cypher, chaining);
         }
 
@@ -104,7 +112,7 @@ public class Steganography {
         int payloadSize = ByteBuffer.wrap(dataBytes, 0, 4).getInt();
 
         List<Byte> extensionNameBytes = new ArrayList<>();
-        for(int i=4+payloadSize; dataBytes[i] != 0; i++)
+        for(int i=4+payloadSize; i< dataBytes.length && dataBytes[i] != 0; i++)
             extensionNameBytes.add(dataBytes[i]);
         String extensionName = new String(ArrayUtils.toPrimitive(extensionNameBytes.toArray(new Byte[0])), StandardCharsets.UTF_8);
 
@@ -150,7 +158,7 @@ public class Steganography {
 
         // Count the amount of changes and conservations for each 2-bit group
 
-        for(int i=hostOffset+4; i<original_host.length; i++) {
+        for(int i=hostOffset; i<original_host.length; i++) {
             int group = (original_host[i] & 0b00000110) >> 1;
 
             if(original_host[i] != tampered_host[i])
@@ -163,7 +171,7 @@ public class Steganography {
 
         boolean[] flipped_groups = new boolean[]{false, false, false, false};
 
-        for(int i=hostOffset+4; i<original_host.length; i++) {
+        for(int i=hostOffset; i<original_host.length; i++) {
             int group = (original_host[i] & 0b00000110) >> 1;
 
             if(changes[group] > conservations[group]) {
@@ -179,9 +187,9 @@ public class Steganography {
 
         for(int i=0; i<4; i++)
             if(flipped_groups[i])
-                tampered_host[hostOffset+i] |= 0b00000001;
+                tampered_host[hostOffset-4+i] |= 0b00000001;
             else
-                tampered_host[hostOffset+i] &= 0b11111110;
+                tampered_host[hostOffset-4+i] &= 0b11111110;
     }
 
 
@@ -191,12 +199,12 @@ public class Steganography {
         // Recover flipped groups information
 
         for(int i=0; i<4; i++)
-            if((host[hostOffset+i] & 1) == 1)
+            if((host[hostOffset-4+i] & 1) == 1)
                 flipped_groups[i] = true;
 
         // Restore the flipped groups
 
-        for(int i=hostOffset+4; i<host.length; i++) {
+        for(int i=hostOffset; i<host.length; i++) {
             int group = (host[i] & 0b00000110) >> 1;
 
             if(flipped_groups[group]) {
@@ -236,10 +244,10 @@ public class Steganography {
     }
 
 
-    public static void main(String[] args) throws IOException, ParseException {
-//        String arguments = "-embed -in tmp/payload.bin -p tmp/host.bmp -out tmp/host_tampered.bmp -steg LSBI";
-//        String arguments = "-extract -p tmp/host_tampered.bmp -out tmp/payload_recovered -steg LSBI";
-        String arguments = "-extract -p tmp/ladoLSBI.bmp -out tmp/out -steg LSBI";
+    public static void main(String[] args) throws IOException, ParseException, IllegalBlockSizeException, NoSuchPaddingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
+//        String arguments = "-embed -in tmp/payload.bin -p tmp/in/host.bmp -out tmp/in/host_tampered.bmp -steg LSB1 -pass escondite -a aes192 -m cbc";
+//        String arguments = "-extract -p tmp/in/host_tampered.bmp -out tmp/out -steg LSB1 -pass escondite -a aes192 -m cbc";
+        String arguments = "-extract -p tmp/in/lsb1_aes192_cbc_escondite.bmp -out tmp/out -steg LSB1 -pass escondite -a aes192 -m cbc ";
         args = arguments.split(" ");
 
         Options options = new Options();
@@ -324,13 +332,6 @@ public class Steganography {
             System.out.printf("Extracted payload to %s\n", outputFile.getName());
         }
     }
-
-    // HT: FF x31 FF  FF x8 FF FF FF FF
-    // PL: 0  x31 1   0  x8 0  0  1  0
-    // OT: FE x31 FF  FE x8 FE FE FF FE
-
-    // 110 -> 111 F
-    // 111 -> 110 E
 
     public enum EncodeMode {LSB1, LSB4, LSBI}
 
