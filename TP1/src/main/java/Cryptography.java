@@ -20,27 +20,6 @@ public class Cryptography {
         return decrypt(chaining,cypher,password,data);
     }
 
-
-    public static void main(String[] args) throws Exception {
-
-//        Security.setProperty("crypto.policy", "unlimited");
-//        int maxKeySize = javax.crypto.Cipher.getMaxAllowedKeyLength("AES");
-//        System.out.println("Max Key Size for AES : " + maxKeySize);
-//        Security.addProvider(new BouncyCastleProvider());
-
-        Steganography.EncryptionChaining chaining=Steganography.EncryptionChaining.CBC;
-        Steganography.EncryptionCypher encryptionCypher= Steganography.EncryptionCypher.AES128;
-
-        String plaintext="this is the test string akjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfakjsjhdkajhskd djhasksjfhksjhfkjsdhkfjhsdkjfhksdjhfkjsdjhfkjshdkfjhsdkjfhskdkjhfksjdhfkjsdhfkjsdhdfkjkjhasdkjfjhaksjdhfkjasadhdfkjkashddkfjhaskdkjdhfhkasjdjhf";
-//        System.out.println(Arrays.toString(plaintext.getBytes()));
-        System.out.println(plaintext);
-
-        byte[] cypher=encrypt(chaining, encryptionCypher,"pass",plaintext.getBytes());
-        System.out.println(Arrays.toString(cypher));
-//        System.out.println(Arrays.toString(decrypt(chaining, encryptionCypher,"pass",cypher)));
-        System.out.println(new String(decrypt(chaining, encryptionCypher,"pass",cypher)));
-    }
-
     private static byte[] encrypt(
     Steganography.EncryptionChaining chaining,Steganography.EncryptionCypher cypher,String password,byte[] content) throws IllegalBlockSizeException, NoSuchPaddingException, UnsupportedEncodingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
         if (cypher== Steganography.EncryptionCypher.DES){

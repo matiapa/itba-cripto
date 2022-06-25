@@ -259,14 +259,11 @@ public class Steganography {
     }
 
 
+
     public static void main(String[] args) throws IOException, ParseException, IllegalBlockSizeException, NoSuchPaddingException, NoSuchAlgorithmException, BadPaddingException, InvalidKeySpecException, InvalidKeyException {
-//        String arguments = "-embed -in tmp/extracted/pdf_image.bmp -p tmp/host.bmp -out tmp/host_tampered.bmp -steg LSB4 -a aes128 -m cfb -pass aplausos";
-//        String arguments = "-extract -p tmp/host_tampered.bmp -out tmp/out -steg LSB4 -a aes128 -m cfb -pass aplausos";
-
-//        String arguments = "-extract -p tmp/extracted/from_pdf.bmp -out tmp/out -steg LSBI -a aes128 -m cfb -pass aplausos";
-        String arguments = "-extract -p tmp/group/paris_lsb4.bmp -out tmp/out -steg LSB4 -a aes128 -m cfb -pass aplausos";
-
-        args = arguments.split(" ");
+        // String arguments = "-embed -in tmp/extracted/from_pdf.bmp -p tmp/host.bmp -out tmp/host_tampered.bmp -steg LSB4 -a aes128 -m cfb -pass aplausos";
+        // String arguments = "-extract -p tmp/host_tampered.bmp -out tmp/out -steg LSB4 -a aes128 -m cfb -pass aplausos";
+        // args = arguments.split(" ");
 
         Options options = new Options();
         options.addOption("embed", false, "Embed a payload into a host");
@@ -278,9 +275,15 @@ public class Steganography {
         options.addOption("a", true, "Encryption cypher method <aes128 | aes192 | aes256 | des>");
         options.addOption("m", true, "Encryption chaining method <ecb | cfb | ofb | cbc>");
         options.addOption("pass", true, "Encryption password");
+        options.addOption("h", "help", false, "Prints help message");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(options, args);
+
+        if (cmd.hasOption("h")){
+            new HelpFormatter().printHelp(Steganography.class.getCanonicalName(), options);
+            return;
+        }
 
         if(!cmd.hasOption("p") || !cmd.hasOption("out") || !cmd.hasOption("steg")) {
             System.out.println("Missing host file, output file and/or steganography mode");
